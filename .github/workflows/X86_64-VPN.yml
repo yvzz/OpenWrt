@@ -1,4 +1,4 @@
-name: X86_64 DIY OpenWrt
+name: X86_64 VPN OpenWrt
 
 on:
   workflow_dispatch:
