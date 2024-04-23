@@ -15,6 +15,8 @@ env:
   UPLOAD_BIN_DIR: false
   FIRMWARE_RELEASE: true
   FIRMWARE_TAG: X86_64
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
 jobs:
@@ -50,13 +52,6 @@ jobs:
         sudo -E apt-get -y autoremove --purge
         sudo -E apt-get -y clean
         sudo timedatectl set-timezone "$TZ"
-
-    # - name: Combine Disks
-    #   uses: easimon/maximize-build-space@master
-    #   with:
-    #     swap-size-mb: 1024
-    #     temp-reserve-mb: 100
-    #     root-reserve-mb: 1024
 
     - name: Before freeing up disk space
       run: |
@@ -178,8 +173,11 @@ jobs:
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
         echo "FILE_DATE=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
+
 
     - name: Check Space Usage
       if: (!cancelled())
@@ -190,17 +188,28 @@ jobs:
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
+        #name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        #path: openwrt/bin
+        name: ${{ env.SOURCE_REPO }}-bin-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
+        path: ${{ env.OPENWRT_PATH }}/bin
 
     - name: Organize files
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
+        # cd openwrt/bin/targets/*/*
+        # rm -rf packages
+        # echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        # echo "status=success" >> $GITHUB_OUTPUT
+        cd $OPENWRT_PATH/bin/targets/*/*
+        cat sha256sums
+        cp $OPENWRT_PATH/.config build.config
+        mv -f $OPENWRT_PATH/bin/packages/*/*/*.ipk packages
+        tar -zcf Packages.tar.gz packages
+        rm -rf packages feeds.buildinfo version.buildinfo
+        echo "KERNEL=$(cat *.manifest | grep ^kernel | cut -d- -f2 | tr -d ' ')" >> $GITHUB_ENV
+        echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
+
 
     - name: Upload firmware directory
       uses: actions/upload-artifact@main
@@ -219,15 +228,46 @@ jobs:
         [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
+    - name: Upload Firmware To Artifact
+      if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
+      uses: actions/upload-artifact@main
+      with:
+        name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE_PATH }}
+
     - name: Upload firmware to release
+      # if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
+      # uses: ncipollo/release-action@v1
       uses: softprops/action-gh-release@v1
       if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
+        name: R${{ env.DATE }} for ${{ env.FIRMWARE_TAG }}
+        allowUpdates: true
+        tag: ${{ env.FIRMWARE_TAG }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: ${{ env.FIRMWARE_PATH }}/*
         tag_name: ${{ steps.tag.outputs.release_tag }}
         body_path: release.txt
         files: ${{ env.FIRMWARE }}/*
+        body: |
+          **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
+          ### 📒 固件信息
+          - 💻 平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
+          - ⚽ 固件源码: ${{ env.REPO_URL }}
+          - 💝 源码分支: ${{ env.REPO_BRANCH }}
+          - 🚀 内核版本: ${{ env.KERNEL }}
+          - 🌐 默认地址: 192.168.1.1
+          - 🔑 默认密码: password
+          ### 🧊 固件版本
+          - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
+          - ${{ env.COMMIT_AUTHOR }}
+          - ${{ env.COMMIT_DATE }}
+          - ${{ env.COMMIT_MESSAGE }}
+          - ${{ env.COMMIT_HASH }}
+
+
 
     - name: Delete workflow runs
       uses: Mattraks/delete-workflow-runs@v2
@@ -243,54 +283,3 @@ jobs:
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    # - name: Upload Bin Directory
-    #   if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-    #   uses: actions/upload-artifact@main
-    #   with:
-    #     name: ${{ env.SOURCE_REPO }}-bin-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
-    #     path: ${{ env.OPENWRT_PATH }}/bin
-
-    # - name: Organize Files
-    #   if: steps.compile.outputs.status == 'success'
-    #   run: |
-    #     cd $OPENWRT_PATH/bin/targets/*/*
-    #     cat sha256sums
-    #     cp $OPENWRT_PATH/.config build.config
-    #     mv -f $OPENWRT_PATH/bin/packages/*/*/*.ipk packages
-    #     tar -zcf Packages.tar.gz packages
-    #     rm -rf packages feeds.buildinfo version.buildinfo
-    #     echo "KERNEL=$(cat *.manifest | grep ^kernel | cut -d- -f2 | tr -d ' ')" >> $GITHUB_ENV
-    #     echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
-
-    # - name: Upload Firmware To Artifact
-    #   if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE != 'true'
-    #   uses: actions/upload-artifact@main
-    #   with:
-    #     name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
-    #     path: ${{ env.FIRMWARE_PATH }}
-
-    # - name: Upload Firmware To Release
-    #   if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
-    #   uses: ncipollo/release-action@v1
-    #   with:
-    #     name: R${{ env.DATE }} for ${{ env.FIRMWARE_TAG }}
-    #     allowUpdates: true
-    #     tag: ${{ env.FIRMWARE_TAG }}
-    #     token: ${{ secrets.GITHUB_TOKEN }}
-    #     artifacts: ${{ env.FIRMWARE_PATH }}/*
-    #     body: |
-    #       **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
-    #       ### 📒 固件信息
-    #       - 💻 平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
-    #       - ⚽ 固件源码: ${{ env.REPO_URL }}
-    #       - 💝 源码分支: ${{ env.REPO_BRANCH }}
-    #       - 🚀 内核版本: ${{ env.KERNEL }}
-    #       - 🌐 默认地址: 192.168.1.1
-    #       - 🔑 默认密码: password
-    #       ### 🧊 固件版本
-    #       - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
-    #       - ${{ env.COMMIT_AUTHOR }}
-    #       - ${{ env.COMMIT_DATE }}
-    #       - ${{ env.COMMIT_MESSAGE }}
-    #       - ${{ env.COMMIT_HASH }}
