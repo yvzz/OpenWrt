@@ -236,10 +236,9 @@ jobs:
         name: R${{ env.DATE }} for ${{ env.FIRMWARE_TAG }}
         # tag_name: ${{ env.FIRMWARE_TAG }}
         token: ${{ secrets.GITHUB_TOKEN }}
-        # files: ${{ env.FIRMWARE_PATH }}/*
+        files: ${{ env.FIRMWARE_PATH }}/*
         tag_name: ${{ steps.tag.outputs.release_tag }}
         body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
 
     - name: Delete Old Workflows
       uses: Mattraks/delete-workflow-runs@main
