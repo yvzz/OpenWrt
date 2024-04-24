@@ -181,12 +181,12 @@ jobs:
       if: (!cancelled())
       run: df -hT
 
-    - name: Upload Bin Directory
-      uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
+    # - name: Upload Bin Directory
+    #   uses: actions/upload-artifact@main
+    #   if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+    #   with:
+    #     name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+    #     path: openwrt/bin
    
     - name: Organize Files
       if: steps.compile.outputs.status == 'success'
@@ -219,13 +219,13 @@ jobs:
         [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: Upload Firmware To Artifact
-      if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
-      uses: actions/upload-artifact@main
-      with:
-        name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
-        #path: ${{ env.FIRMWARE_PATH }}
-        path: openwrt/bin
+    # - name: Upload Firmware To Artifact
+    #   if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
+    #   uses: actions/upload-artifact@main
+    #   with:
+    #     name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
+    #     #path: ${{ env.FIRMWARE_PATH }}
+    #     path: openwrt/bin
 
     - name: Upload Firmware To Release
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
