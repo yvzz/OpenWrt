@@ -208,6 +208,14 @@ jobs:
     #     #path: ${{ env.FIRMWARE }}
     #     #name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
     #     path: openwrt/bin
+
+    - name: Upload Firmware To Artifact
+      if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
+      uses: actions/upload-artifact@main
+      with:
+        name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE_PATH }}/*
+        # path: openwrt/bin
         
     - name: Generate release tag
       id: tag
@@ -219,14 +227,6 @@ jobs:
         [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: Upload Firmware To Artifact
-      if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
-      uses: actions/upload-artifact@main
-      with:
-        name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
-        path: ${{ env.FIRMWARE_PATH }}/*
-        # path: openwrt/bin
-
     - name: Upload Firmware To Release
       uses: softprops/action-gh-release@v1 
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
@@ -237,19 +237,31 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag_name: R${{ steps.tag.outputs.release_tag }}
         body_path: release.txt
-        files: ${{ env.FIRMWARE_PATH }}/*
+        files: ${{ env.FIRMWARE_PATH }}/*      
+        bodyFile: release.txt
+        body: |
+          **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
+          ### 📒 固件信息
+          - 💻 平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
+          - ⚽ 固件源码: ${{ env.REPO_URL }}
+          - 💝 源码分支: ${{ env.REPO_BRANCH }}
+          - 🚀 内核版本: ${{ env.KERNEL }}
+          - 🌐 默认地址: 10.0.0.1
+          - 🔑 默认密码: password
+          - 🔗 cowtransfer: ${{ steps.cowtransfer.outputs.url }}
+          - 🔗 wetransfer: ${{ steps.wetransfer.outputs.url }}
+          
+    # - name: Delete Old Workflows
+    #   uses: Mattraks/delete-workflow-runs@main
+    #   with:
+    #     token: ${{ secrets.GITHUB_TOKEN }}
+    #     retain_days: 7
+    #     keep_minimum_runs: 5
 
-    - name: Delete Old Workflows
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        retain_days: 7
-        keep_minimum_runs: 5
-
-    - name: Delete Old Releases
-      uses: dev-drprasad/delete-older-releases@master
-      with:
-        keep_latest: 15
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # - name: Delete Old Releases
+    #   uses: dev-drprasad/delete-older-releases@master
+    #   with:
+    #     keep_latest: 15
+    #     delete_tags: true
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
