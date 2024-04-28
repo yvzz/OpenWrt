@@ -12,8 +12,11 @@ env:
   DIY_SCRIPT: diy-script.sh
   CLASH_KERNEL: amd64
   CACHE_TOOLCHAIN: true
-  UPLOAD_BIN_DIR: false
+  UPLOAD_BIN_DIR: true
   FIRMWARE_RELEASE: true
+  UPLOAD_COWTRANSFER: true
+  UPLOAD_WETRANSFER: true
+  UPLOAD_RELEASE: true
   FIRMWARE_TAG: X86_64
   TZ: Asia/Shanghai
 
@@ -51,12 +54,52 @@ jobs:
         sudo -E apt-get -y clean
         sudo timedatectl set-timezone "$TZ"
 
-    - name: Combine Disks
-      uses: easimon/maximize-build-space@master
+    - name: Before freeing up disk space
+      run: |
+        echo "Before freeing up disk space"
+        echo "=============================================================================="
+        df -hT
+        echo "=============================================================================="
+    
+    - name: "Optimize Disk Space"
+      uses: "sclsyin/disk-space-optimizer-ghaction@main"
       with:
-        swap-size-mb: 1024
-        temp-reserve-mb: 100
-        root-reserve-mb: 1024
+        operate_sudo: "True"
+        general_include: ".+"
+        general_exclude: |-
+          ^GCC$
+          ^G\+\+$
+          Clang
+          LLVM
+        docker_include: ".+"
+        docker_prune: "True"
+        docker_clean: "True"
+        apt_prune: "True"
+        apt_clean: "True"
+        homebrew_prune: "True"
+        homebrew_clean: "True"
+        npm_prune: "True"
+        npm_clean: "True"
+        os_swap: "True"
+
+    - name: Freeing up disk space
+      uses: sclsyin/maximize-build-space@master
+      with: 
+         root-reserve-mb: 2048
+         swap-size-mb: 1
+         remove-dotnet: 'true'
+         remove-android: 'true'
+         remove-haskell: 'true'
+         remove-codeql: 'true'
+         remove-docker-images: 'true'
+
+    - name: Free up disk space complete
+      run: |
+         echo "Free up disk space complete"
+         echo "=============================================================================="
+         df -hT
+         echo "=============================================================================="
+    
 
     - name: Checkout
       uses: actions/checkout@main
@@ -184,7 +227,6 @@ jobs:
           - 🔑 默认密码: password
           ### 🧊 固件版本
           - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
-          - ${{ env.COMMIT_AUTHOR }}
           - ${{ env.COMMIT_DATE }}
           - ${{ env.COMMIT_MESSAGE }}
           - ${{ env.COMMIT_HASH }}
