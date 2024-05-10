@@ -202,7 +202,7 @@ jobs:
         echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
 
     - name: Upload Firmware To Artifact
-      if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE != 'true'
+      if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
       uses: actions/upload-artifact@main
       with:
         name: ${{ env.SOURCE_REPO }}-firmware-plus-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
@@ -233,9 +233,7 @@ jobs:
       #     - ${{ env.COMMIT_MESSAGE }}
       #     - ${{ env.COMMIT_HASH }}
       with:
-        tag: openwrt_x86_64_${{ env.FIRMWARE_TAG }}
+        tag: ${{ env.FIRMWARE_TAG }}
         artifacts: ${{ env.FIRMWARE_PATH }}/*
         allowUpdates: true
         token: ${{ secrets.GITHUB_TOKEN }}
-        body: |
-          ### **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
