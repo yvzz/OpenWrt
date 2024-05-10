@@ -211,7 +211,11 @@ jobs:
     - name: Upload Firmware To Release
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
       uses: ncipollo/release-action@v1
-      # with:
+      with:
+        tag: ${{ env.FIRMWARE_TAG }}
+        artifacts: ${{ env.FIRMWARE_PATH }}/*
+        allowUpdates: true
+        token: ${{ secrets.GITHUB_TOKEN }}
       #   name: R${{ env.DATE }} for ${{ env.FIRMWARE_TAG }}
       #   allowUpdates: true
       #   tag: ${{ env.FIRMWARE_TAG }}
@@ -232,8 +236,4 @@ jobs:
       #     - ${{ env.COMMIT_DATE }}
       #     - ${{ env.COMMIT_MESSAGE }}
       #     - ${{ env.COMMIT_HASH }}
-      with:
-        tag: ${{ env.FIRMWARE_TAG }}
-        artifacts: ${{ env.FIRMWARE_PATH }}/*
-        allowUpdates: true
-        token: ${{ secrets.GITHUB_TOKEN }}
+
