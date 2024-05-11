@@ -216,7 +216,15 @@ jobs:
         name: ${{ env.SOURCE_REPO }}-firmware-${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}-${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE_PATH }}/*
         # path: openwrt/bin
-        
+
+
+    - name: Generate release tag
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+        echo "release_tag=$(date +"%Y.%m.%d")" >> $GITHUB_OUTPUT
+        echo "status=success" >> $GITHUB_OUTPUT
+    
     - name: Upload Firmware To Release
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
       uses: ncipollo/release-action@v1
