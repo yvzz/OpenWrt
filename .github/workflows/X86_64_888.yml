@@ -232,7 +232,7 @@ jobs:
       uses: ncipollo/release-action@v2
       with:
         name: OpenWrt for ${{ env.FIRMWARE_TAG }}-${{ env.DATE }}
-        tag: ${{ env.FIRMWARE_TAG }}
+        tag: ${{ env.FIRMWARE_TAG }}_mini
         artifacts: ${{ env.FIRMWARE_PATH }}/*
         allowUpdates: true
         token: ${{ secrets.GITHUB_TOKEN }}
