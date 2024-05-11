@@ -216,7 +216,7 @@ jobs:
         artifacts: ${{ env.FIRMWARE_PATH }}/*
         allowUpdates: true
         token: ${{ secrets.GITHUB_TOKEN }}
-        name: R${{ env.DATE }} for ${{ env.FIRMWARE_TAG }}
+        name: OpenWrt-R${{ env.DATE }} for ${{ env.FIRMWARE_TAG }}
         body: |
           ### 📒 固件信息
           - 💻 平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
