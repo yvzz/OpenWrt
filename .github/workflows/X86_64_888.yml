@@ -217,15 +217,15 @@ jobs:
         path: ${{ env.FIRMWARE_PATH }}/*
         # path: openwrt/bin
         
-    # - name: Generate release tag
-    #   id: tag
-    #   if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-    #   run: |
-    #     echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-    #     touch release.txt
-    #     [ $UPLOAD_COWTRANSFER = true ] && echo "🔗 [Cowtransfer](${{ steps.cowtransfer.outputs.url }})" >> release.txt
-    #     [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
-    #     echo "status=success" >> $GITHUB_OUTPUT
+    - name: Generate release tag
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+        touch release.txt
+        [ $UPLOAD_COWTRANSFER = true ] && echo "🔗 [Cowtransfer](${{ steps.cowtransfer.outputs.url }})" >> release.txt
+        [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
+        echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload Firmware To Release
       if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
@@ -245,28 +245,3 @@ jobs:
           - 🚀 内核版本: ${{ env.KERNEL }}
           - 🌐 默认地址: 192.168.1.1
           - 🔑 默认密码: password
-        
-        
-    # - name: Upload Firmware To Release
-    #   uses: softprops/action-gh-release@v2 
-    #   if: steps.compile.outputs.status == 'success' && env.FIRMWARE_RELEASE == 'true'
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     name: OpenWrt for ${{ env.FIRMWARE_TAG }}-${{ env.DATE }}
-    #     token: ${{ secrets.GITHUB_TOKEN }}
-    #     tag_name: R${{ steps.tag.outputs.release_tag }}
-    #     body_path: release.txt
-    #     fail_on_unmatched_files: true
-    #     files: ${{ env.FIRMWARE_PATH }}/*      
-    #     body: |
-    #       **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
-    #       ### 📒 固件信息
-    #       - 💻 平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
-    #       - ⚽ 固件源码: ${{ env.REPO_URL }}
-    #       - 💝 源码分支: ${{ env.REPO_BRANCH }}
-    #       - 🚀 内核版本: ${{ env.KERNEL }}
-    #       - 🌐 默认地址: 10.0.0.1
-    #       - 🔑 默认密码: password
-    #       - 🔗 cowtransfer: ${{ steps.cowtransfer.outputs.url }}
-    #       - 🔗 wetransfer: ${{ steps.wetransfer.outputs.url }}
