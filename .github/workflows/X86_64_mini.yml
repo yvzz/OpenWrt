@@ -1,4 +1,4 @@
-name: X86_64_OpenWrt_mini
+name: X86_64_OpenWrt_Mini
 
 on:
   workflow_dispatch:
