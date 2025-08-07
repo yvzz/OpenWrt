@@ -4,7 +4,7 @@ name: X86_64_OpenWrt_Plus
 on:
   workflow_dispatch:
   schedule:
-    - cron: 0 12 * * 3
+    - cron: 0 12 * * *
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
