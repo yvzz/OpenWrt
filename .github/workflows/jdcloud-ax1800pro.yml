@@ -1,4 +1,4 @@
-name: 编译京东云AX1800Pro OpenWrt固件
+name: JD-AX1800Pro
 on:
   workflow_dispatch:  # 手动触发编译（推荐）
   # push:  # 可选：提交代码自动触发
@@ -45,7 +45,7 @@ jobs:
         run: |
           cd openwrt
           # 将本地.config文件替换到源码目录（需确保.config在仓库根目录）
-          cp ../.config ./.config
+          cp ../configs/AX1800Pro.config ./.config
           # 生成最终配置
           make defconfig
 
