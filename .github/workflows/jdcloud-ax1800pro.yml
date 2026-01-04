@@ -1,0 +1,71 @@
+name: 编译京东云AX1800Pro OpenWrt固件
+on:
+  workflow_dispatch:  # 手动触发编译（推荐）
+  # push:  # 可选：提交代码自动触发
+  #   branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      # 1. 环境准备（安装依赖）
+      - name: 安装编译依赖
+        run: |
+          sudo apt update -y
+          sudo apt full-upgrade -y
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+          gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
+          libelf-dev ecj fastjar proguard maven openjdk-17-jdk-headless antlr3 gperf swig
+
+      # 2. 拉取OpenWrt源码（推荐使用immortalwrt，适配IPQ60xx）
+      - name: 克隆源码
+        run: |
+          git clone --depth=1 -b openwrt-21.02 https://github.com/immortalwrt/immortalwrt.git openwrt
+          cd openwrt
+          ./scripts/feeds update -a
+
+      # 3. 添加第三方feeds（补充PassWall/OpenClash等插件）
+      - name: 添加插件源
+        run: |
+          cd openwrt
+          # PassWall
+          echo "src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages.git;main" >> feeds.conf.default
+          echo "src-git passwall https://github.com/xiaorouji/openwrt-passwall.git;main" >> feeds.conf.default
+          # OpenClash
+          git clone --depth=1 https://github.com/vernesong/OpenClash.git package/luci-app-openclash
+          # 广告过滤/其他插件
+          git clone --depth=1 https://github.com/yaof2/luci-app-ikoolproxy.git package/luci-app-ikoolproxy
+          git clone --depth=1 https://github.com/sirpdboy/luci-app-ddnsto.git package/luci-app-ddnsto
+          # 更新feeds
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # 4. 替换配置文件（使用上面的.config）
+      - name: 导入编译配置
+        run: |
+          cd openwrt
+          # 将本地.config文件替换到源码目录（需确保.config在仓库根目录）
+          cp ../.config ./.config
+          # 生成最终配置
+          make defconfig
+
+      # 5. 下载编译依赖
+      - name: 下载依赖包
+        run: |
+          cd openwrt
+          make download -j$(nproc)
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      # 6. 开始编译（单线程避免内存溢出，ARM64编译需更多资源）
+      - name: 编译固件
+        run: |
+          cd openwrt
+          make -j$(nproc) || make -j1 V=s  # 失败时输出详细日志
+
+      # 7. 上传编译产物（可选，保存固件）
+      - name: 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: 京东云AX1800Pro-OpenWrt固件
+          path: openwrt/bin/targets/ipq60xx/generic/
