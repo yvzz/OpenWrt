@@ -60,9 +60,6 @@ git clone --depth=1 https://github.com/ximiTech/msd_lite package/msd_lite
 # MosDNS
 # git clone --depth=1 https://github.com/sbwml/luci-app-mosdns package/luci-app-mosdns
 
-# Alist
-# git clone --depth=1 https://github.com/sbwml/luci-app-alist package/luci-app-alist
-
 # iStore
 git_sparse_clone main https://github.com/linkease/istore-ui app-store-ui
 git_sparse_clone main https://github.com/linkease/istore luci
