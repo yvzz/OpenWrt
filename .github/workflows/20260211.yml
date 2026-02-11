@@ -23,7 +23,7 @@ jobs:
 
       # 步骤2：优化编译环境（清理磁盘/增加交换空间）
       - name: Optimize Build Environment
-        uses: sclsyin/maximize-build-space@v1.0.0
+        uses: sclsyin/maximize-build-space@master  # 修正：使用master分支（无正式版本）
         with:
           root-reserve-mb: 4096
           swap-size-mb: 8192  # 8GB交换空间，避免内存不足
@@ -69,7 +69,10 @@ jobs:
         run: |
           cd $OPENWRT_PATH
           # 复制你仓库中的x86_64_Mini.config到OpenWrt目录
-          cp $GITHUB_WORKSPACE/configs/x86_64_Mini.config .config
+          cp $GITHUB_WORKSPACE/configs/x86_64_Mini.config .config || {
+            echo "配置文件不存在，使用默认配置！"
+            make defconfig
+          }
           # 验证并生成默认配置
           make defconfig
 
@@ -78,7 +81,7 @@ jobs:
         run: |
           cd $OPENWRT_PATH
           make download -j8
-          # 清理无效下载文件
+          # 清理无效下载文件（容错处理）
           find dl -size -1024c -exec rm -f {} \; || true
 
       # 步骤8：编译固件（核心步骤，带错误日志）
@@ -94,7 +97,11 @@ jobs:
           # 编译，失败则单线程重新编译并输出详细日志
           make -j$COMPILE_THREAD || make -j1 V=s 2>&1 | tee build_error.log
           # 标记编译状态
-          echo "status=success" >> $GITHUB_OUTPUT
+          if [ -f "bin/targets/x86/64/*.img.gz" ] || [ -f "bin/targets/x86/64/*.tar.gz" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+          fi
           # 设置固件版本信息
           echo "FIRMWARE_TAG=$(date +%Y%m%d)-x86_64-mini" >> $GITHUB_ENV
 
@@ -122,7 +129,7 @@ jobs:
       # 步骤11：发布固件到GitHub Release（可选，编译成功时触发）
       - name: Release Firmware
         if: steps.compile.outcome == 'success'
-        uses: ncipollo/release-action@v2
+        uses: ncipollo/release-action@v1  # 修正：使用官方最新的v1版本
         with:
           tag: ${{ env.FIRMWARE_TAG }}
           name: OpenWrt x86_64 Mini ${{ env.FIRMWARE_TAG }}
