@@ -59,7 +59,7 @@ jobs:
 
           p "展开配置"
           cd ${wrtdir}
-          cp ${ffdir}/scripts/openwrt/config.seed .config
+          cp ${ffdir}/configs/x86_64_Mini.config .config
           make defconfig
         '
 
