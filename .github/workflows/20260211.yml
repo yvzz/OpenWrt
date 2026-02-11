@@ -10,102 +10,118 @@ on:
 # 作业配置
 jobs:
   build-openwrt:
-    runs-on: ubuntu-22.04  # 使用Ubuntu 22.04环境（OpenWrt编译推荐）
+    runs-on: ubuntu-22.04
     permissions:
-      contents: write  # 授予发布固件的权限
+      contents: write
 
     steps:
-      # 步骤1：检出代码（OpenWrt源码/配置文件）
+      # 步骤0：优先深度清理磁盘（解决No space left问题，移到最前面）
+      - name: Deep Clean Disk Space (Critical!)
+        run: |
+          # 1. 卸载并删除超大无用包
+          sudo apt remove -y --purge azure-cli* dotnet* ghc* google* llvm* mono* msodbcsql* mssql-tools* powershell* zulu* || true
+          sudo apt autoremove -y --purge || true
+          sudo apt clean || true
+          
+          # 2. 删除超大目录（释放10GB+空间）
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell /usr/lib/jvm /var/lib/docker || true
+          sudo rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* || true
+          sudo rm -rf /tmp/* /var/tmp/* || true
+          
+          # 3. 清理日志和缓存
+          sudo journalctl --vacuum-size=100M || true
+          sudo truncate -s 0 /var/log/*log || true
+          
+          # 4. 查看磁盘使用情况（便于排查）
+          df -h
+
+      # 步骤1：检出代码
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 拉取完整历史，避免feeds同步失败
+          fetch-depth: 0
 
-      # 步骤2：优化编译环境（清理磁盘/增加交换空间）
+      # 步骤2：优化编译环境（补充清理）
       - name: Optimize Build Environment
-        uses: sclsyin/maximize-build-space@master  # 修正：使用master分支（无正式版本）
+        uses: sclsyin/maximize-build-space@master
         with:
-          root-reserve-mb: 4096
-          swap-size-mb: 8192  # 8GB交换空间，避免内存不足
+          root-reserve-mb: 2048  # 降低根目录保留空间
+          swap-size-mb: 8192
           remove-dotnet: true
           remove-android: true
           remove-haskell: true
+          remove-codeql: true
+          remove-docker-images: true  # 强制删除所有Docker镜像
 
-      # 步骤3：初始化系统依赖
-      - name: Install System Dependencies
+      # 步骤3：初始化系统依赖（精简依赖列表+分步骤执行）
+      - name: Install System Dependencies (Simplified)
         run: |
-          sudo apt update && sudo apt full-upgrade -y
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
-          gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
-          libelf-dev libtool autopoint make libglib2.0-dev pkg-config curl zstd
-          # 清理无用包，释放空间
+          # 先更新（仅更新必要源，跳过超大包）
+          sudo apt update -o Acquire::http::No-Cache=True -o Acquire::http::Pipeline-Depth=0
+          
+          # 分批次安装依赖，避免一次性占用过多空间
+          sudo apt install -y build-essential flex bison g++ gawk gcc-multilib g++-multilib gettext git || true
+          sudo apt install -y libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget || true
+          sudo apt install -y libelf-dev libtool autopoint make libglib2.0-dev pkg-config curl zstd clang || true
+          
+          # 再次清理
           sudo apt autoremove -y && sudo apt clean -y
-          # 修复Docker镜像清理可能的错误
           docker rmi $(docker images -q) || true
+          df -h  # 再次查看磁盘使用
 
-      # 步骤4：克隆OpenWrt源码（可替换为你需要的分支/仓库）
+      # 步骤4：克隆OpenWrt源码
       - name: Clone OpenWrt Source Code
         env:
           REPO_URL: https://github.com/openwrt/openwrt
-          REPO_BRANCH: openwrt-23.05  # 稳定版分支
+          REPO_BRANCH: openwrt-23.05
         run: |
           git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
           cd openwrt
-          # 设置编译目录环境变量
           echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
 
-      # 步骤5：更新并安装feeds（解决插件依赖）
+      # 步骤5：更新并安装feeds
       - name: Update & Install Feeds
         run: |
           cd $OPENWRT_PATH
-          # 替换国内源，加速下载（可选）
           sed -i 's/downloads.openwrt.org/mirrors.ustc.edu.cn\/openwrt/g' feeds.conf.default
-          # 重试机制，避免网络失败
           ./scripts/feeds update -a || (sleep 10 && ./scripts/feeds update -a)
           ./scripts/feeds install -a
 
-      # 步骤6：复制自定义配置文件（关键！替换为你的config路径）
+      # 步骤6：复制自定义配置文件
       - name: Load Custom Configuration
         run: |
           cd $OPENWRT_PATH
-          # 复制你仓库中的x86_64_Mini.config到OpenWrt目录
           cp $GITHUB_WORKSPACE/configs/x86_64_Mini.config .config || {
             echo "配置文件不存在，使用默认配置！"
             make defconfig
           }
-          # 验证并生成默认配置
           make defconfig
 
-      # 步骤7：下载编译依赖（提前下载，避免编译中断）
+      # 步骤7：下载编译依赖
       - name: Download Dependencies
         run: |
           cd $OPENWRT_PATH
           make download -j8
-          # 清理无效下载文件（容错处理）
           find dl -size -1024c -exec rm -f {} \; || true
 
-      # 步骤8：编译固件（核心步骤，带错误日志）
+      # 步骤8：编译固件
       - name: Compile OpenWrt Firmware
         id: compile
-        continue-on-error: true  # 失败后继续执行，保存日志
+        continue-on-error: true
         run: |
           cd $OPENWRT_PATH
-          # 限制线程数，避免内存溢出（关键！）
           COMPILE_THREAD=$(($(nproc)/2))
           if [ $COMPILE_THREAD -lt 1 ]; then COMPILE_THREAD=1; fi
           echo "Using $COMPILE_THREAD threads to compile..."
-          # 编译，失败则单线程重新编译并输出详细日志
           make -j$COMPILE_THREAD || make -j1 V=s 2>&1 | tee build_error.log
-          # 标记编译状态
           if [ -f "bin/targets/x86/64/*.img.gz" ] || [ -f "bin/targets/x86/64/*.tar.gz" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
           else
             echo "status=failure" >> $GITHUB_OUTPUT
           fi
-          # 设置固件版本信息
           echo "FIRMWARE_TAG=$(date +%Y%m%d)-x86_64-mini" >> $GITHUB_ENV
 
-      # 步骤9：上传错误日志（编译失败时触发）
+      # 步骤9：上传错误日志
       - name: Upload Error Logs
         if: steps.compile.outcome != 'success'
         uses: actions/upload-artifact@v4
@@ -115,21 +131,21 @@ jobs:
             ${{ env.OPENWRT_PATH }}/build_error.log
             ${{ env.OPENWRT_PATH }}/.config
             ${{ env.OPENWRT_PATH }}/logs/
-          retention-days: 7  # 日志保留7天
+          retention-days: 7
 
-      # 步骤10：上传编译成功的固件
+      # 步骤10：上传固件
       - name: Upload Firmware Artifact
         if: steps.compile.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: openwrt-x86_64-mini-firmware
           path: ${{ env.OPENWRT_PATH }}/bin/targets/
-          retention-days: 30  # 固件保留30天
+          retention-days: 30
 
-      # 步骤11：发布固件到GitHub Release（可选，编译成功时触发）
+      # 步骤11：发布固件
       - name: Release Firmware
         if: steps.compile.outcome == 'success'
-        uses: ncipollo/release-action@v1  # 修正：使用官方最新的v1版本
+        uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.FIRMWARE_TAG }}
           name: OpenWrt x86_64 Mini ${{ env.FIRMWARE_TAG }}
@@ -139,6 +155,6 @@ jobs:
             - 平台：x86_64
             - 核心插件：PassWall2、OpenClash、AdGuardHome、TurboACC
           artifacts: ${{ env.OPENWRT_PATH }}/bin/targets/**/*.tar.gz,${{ env.OPENWRT_PATH }}/bin/targets/**/*.img.gz
-          allowUpdates: true  # 允许更新同标签的Release
-          makeLatest: true    # 标记为最新版本
+          allowUpdates: true
+          makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
