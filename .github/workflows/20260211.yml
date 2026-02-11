@@ -15,7 +15,7 @@ jobs:
       contents: write
 
     steps:
-      # 步骤0：优先深度清理磁盘（解决No space left问题，移到最前面）
+      # 步骤0：优先深度清理磁盘空间
       - name: Deep Clean Disk Space (Critical!)
         run: |
           # 1. 卸载并删除超大无用包
@@ -32,7 +32,7 @@ jobs:
           sudo journalctl --vacuum-size=100M || true
           sudo truncate -s 0 /var/log/*log || true
           
-          # 4. 查看磁盘使用情况（便于排查）
+          # 4. 查看磁盘使用情况
           df -h
 
       # 步骤1：检出代码
@@ -41,51 +41,77 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 步骤2：优化编译环境（补充清理）
+      # 步骤2：优化编译环境
       - name: Optimize Build Environment
         uses: sclsyin/maximize-build-space@master
         with:
-          root-reserve-mb: 2048  # 降低根目录保留空间
+          root-reserve-mb: 2048
           swap-size-mb: 8192
           remove-dotnet: true
           remove-android: true
           remove-haskell: true
           remove-codeql: true
-          remove-docker-images: true  # 强制删除所有Docker镜像
+          remove-docker-images: true
 
-      # 步骤3：初始化系统依赖（精简依赖列表+分步骤执行）
+      # 步骤3：初始化系统依赖
       - name: Install System Dependencies (Simplified)
         run: |
           # 先更新（仅更新必要源，跳过超大包）
           sudo apt update -o Acquire::http::No-Cache=True -o Acquire::http::Pipeline-Depth=0
           
-          # 分批次安装依赖，避免一次性占用过多空间
+          # 分批次安装依赖
           sudo apt install -y build-essential flex bison g++ gawk gcc-multilib g++-multilib gettext git || true
           sudo apt install -y libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget || true
-          sudo apt install -y libelf-dev libtool autopoint make libglib2.0-dev pkg-config curl zstd clang || true
+          sudo apt install -y libelf-dev libtool autopoint make curl zstd || true
           
           # 再次清理
           sudo apt autoremove -y && sudo apt clean -y
           docker rmi $(docker images -q) || true
-          df -h  # 再次查看磁盘使用
+          df -h
 
-      # 步骤4：克隆OpenWrt源码
-      - name: Clone OpenWrt Source Code
+      # 步骤4：克隆OpenWrt源码（替换国内镜像）
+      - name: Clone OpenWrt Source Code (Use China Mirror)
         env:
-          REPO_URL: https://github.com/openwrt/openwrt
+          # 替换为中科大OpenWrt镜像（避免官方源访问失败）
+          REPO_URL: https://mirrors.ustc.edu.cn/openwrt.git
           REPO_BRANCH: openwrt-23.05
         run: |
           git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
           cd openwrt
+          # 设置编译目录环境变量
           echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
 
-      # 步骤5：更新并安装feeds
-      - name: Update & Install Feeds
+      # 步骤5：替换feeds为国内镜像 + 增强重试（核心修复！）
+      - name: Update & Install Feeds (China Mirror + Retry)
         run: |
           cd $OPENWRT_PATH
-          sed -i 's/downloads.openwrt.org/mirrors.ustc.edu.cn\/openwrt/g' feeds.conf.default
-          ./scripts/feeds update -a || (sleep 10 && ./scripts/feeds update -a)
-          ./scripts/feeds install -a
+          # 备份原feeds.conf.default
+          cp feeds.conf.default feeds.conf.default.bak
+          
+          # 替换所有官方feeds为中科大镜像（解决503错误）
+          sed -i 's|^src-git \(.*\) https://git.openwrt.org/|\1 https://mirrors.ustc.edu.cn/openwrt/|g' feeds.conf.default
+          # 补充luci的镜像（luci仓库路径特殊）
+          sed -i 's|https://git.openwrt.org/project/luci.git|https://mirrors.ustc.edu.cn/openwrt/luci.git|g' feeds.conf.default
+          
+          # 增强重试机制：最多重试5次，每次间隔10秒
+          RETRY_COUNT=0
+          MAX_RETRY=5
+          while [ $RETRY_COUNT -lt $MAX_RETRY ]; do
+            echo "=== Retry $((RETRY_COUNT+1))/$MAX_RETRY: Updating feeds ==="
+            ./scripts/feeds update -a && break  # 成功则退出循环
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            echo "Feeds update failed, sleep 10s and retry..."
+            sleep 10
+          done
+          
+          # 如果最终还是失败，退出并报错
+          if [ $RETRY_COUNT -eq $MAX_RETRY ]; then
+            echo "Error: Feeds update failed after $MAX_RETRY retries!"
+            exit 1
+          fi
+          
+          # 安装feeds（同样增加重试）
+          ./scripts/feeds install -a || (sleep 5 && ./scripts/feeds install -a)
 
       # 步骤6：复制自定义配置文件
       - name: Load Custom Configuration
@@ -98,10 +124,15 @@ jobs:
           make defconfig
 
       # 步骤7：下载编译依赖
-      - name: Download Dependencies
+      - name: Download Dependencies (China Mirror)
         run: |
           cd $OPENWRT_PATH
-          make download -j8
+          # 替换下载源为国内镜像，加速依赖下载
+          sed -i 's|downloads.openwrt.org|mirrors.ustc.edu.cn/openwrt|g' ./scripts/download.pl
+          sed -i 's|https://downloads.openwrt.org|https://mirrors.ustc.edu.cn/openwrt|g' ./include/download.mk
+          
+          # 下载依赖（增加重试）
+          make download -j4 || (sleep 10 && make download -j1)
           find dl -size -1024c -exec rm -f {} \; || true
 
       # 步骤8：编译固件
