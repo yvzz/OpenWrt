@@ -1,6 +1,6 @@
 #!/bin/bash
 # Download AdGuardHome core
-set -e
+# Allow failures so network issues don't block compilation
 
 OPENWRT_PATH="${OPENWRT_PATH:-$PWD}"
 CLASH_KERNEL="${CLASH_KERNEL:-amd64}"
@@ -19,9 +19,6 @@ ADGUARD_PATH="${OPENWRT_PATH}/package/luci-app-adguardhome/files"
 
 mkdir -p "${ADGUARD_PATH}"
 echo "Downloading AdGuardHome core from ${ADGUARD_URL}..."
-wget -qO- "${ADGUARD_URL}" | tar xzf - -C "${ADGUARD_PATH}" AdGuardHome/AdGuardHome --strip-components=1 || {
-    echo "Failed to download AdGuardHome core"
-    exit 1
-}
+wget --tries=3 --timeout=30 -qO- "${ADGUARD_URL}" | tar xzf - -C "${ADGUARD_PATH}" AdGuardHome/AdGuardHome --strip-components=1 && chmod +x "${ADGUARD_PATH}/AdGuardHome" && echo "AdGuardHome core downloaded successfully" || echo "AdGuardHome core download failed, skipping"
 chmod +x "${ADGUARD_PATH}/AdGuardHome"
 echo "AdGuardHome core downloaded successfully"

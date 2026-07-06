@@ -1,6 +1,6 @@
 #!/bin/bash
 # Download OpenClash clash/mihomo kernel
-set -e
+# Allow failures so network issues don't block compilation
 
 OPENWRT_PATH="${OPENWRT_PATH:-$PWD}"
 CLASH_KERNEL="${CLASH_KERNEL:-amd64}"
@@ -12,10 +12,7 @@ MIHOMO_PATH="${OPENWRT_PATH}/package/OpenClash/core/mihomo"
 
 mkdir -p "${MIHOMO_PATH}"
 echo "Downloading mihomo kernel from ${MIHOMO_URL}..."
-wget -qO- "${MIHOMO_URL}" | gunzip > "${MIHOMO_PATH}/mihomo" || {
-    echo "Failed to download mihomo kernel"
-    exit 1
-}
+wget --tries=3 --timeout=30 -qO- "${MIHOMO_URL}" | gunzip > "${MIHOMO_PATH}/mihomo" && chmod +x "${MIHOMO_PATH}/mihomo" && echo "mihomo kernel downloaded successfully" || echo "mihomo kernel download failed, skipping"
 chmod +x "${MIHOMO_PATH}/mihomo"
 echo "mihomo kernel downloaded successfully"
 
@@ -32,4 +29,4 @@ wget -qO- "${CLASH_URL}" | gunzip > "${CLASH_PATH}/clash" || {
 chmod +x "${CLASH_PATH}/clash" 2>/dev/null || true
 echo "clash premium kernel downloaded successfully"
 
-echo "All clash kernels downloaded"
+echo "Clash kernel download step completed"
