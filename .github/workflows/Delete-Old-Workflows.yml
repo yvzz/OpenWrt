@@ -6,11 +6,8 @@ on:
       delete_all_failed:
         description: '是否删除全部失败的 Workflow'
         required: true
-        type: choice
-        default: 'NO'
-        options:
-          - 'YES'
-          - 'NO'
+        type: boolean
+        default: false
       retain_days:
         description: '保留最近几天的 Workflow'
         required: true
@@ -25,7 +22,7 @@ jobs:
 
     steps:
     - name: Delete All Failed Workflows
-      if: ${{ inputs.delete_all_failed == 'YES' }}
+      if: ${{ inputs.delete_all_failed }}
       uses: Mattraks/delete-workflow-runs@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +31,7 @@ jobs:
         delete_run_by_conclusion_pattern: failure
 
     - name: Delete Old Workflows By Days
-      if: ${{ inputs.delete_all_failed != 'YES' }}
+      if: ${{ !inputs.delete_all_failed }}
       uses: Mattraks/delete-workflow-runs@main
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
